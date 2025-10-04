@@ -49,8 +49,8 @@ jobs:
         
     - name: Create environment file
       run: |
-        echo "API_KEY=${{ secrets.BYBIT_API_KEY }}" > .env
-        echo "API_SECRET=${{ secrets.BYBIT_API_SECRET }}" >> .env
+        echo "API_KEY=${{ secrets.API_KEY }}" > .env
+        echo "API_SECRET=${{ secrets.API_SECRET }}" >> .env
         echo "AUTO_TRADE=${{ github.event.inputs.auto_trade || 'false' }}" >> .env
         echo "POSITION_SIZE_USDT=25" >> .env
         echo "SYMBOL=BTCUSDT" >> .env
