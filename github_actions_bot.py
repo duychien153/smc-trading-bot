@@ -5,10 +5,44 @@ from dotenv import load_dotenv
 from pybit.unified_trading import HTTP
 import json
 import time
+import random
 from datetime import datetime
 
 print("=== 🤖 SMC Bot GitHub Actions ===")
 print(f"🕐 Thời gian chạy: {datetime.now()}")
+
+# ======================
+# 🔄 Retry function cho rate limit
+# ======================
+def retry_api_call(func, *args, **kwargs):
+    """Retry API calls với exponential backoff"""
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            # Random delay để tránh rate limit
+            if attempt > 0:
+                delay = (2 ** attempt) + random.uniform(0, 1)
+                print(f"⏳ Retry {attempt + 1}/{max_retries}, chờ {delay:.1f}s...")
+                time.sleep(delay)
+            
+            result = func(*args, **kwargs)
+            return result
+            
+        except Exception as e:
+            error_msg = str(e)
+            print(f"❌ Attempt {attempt + 1} failed: {error_msg}")
+            
+            if "rate limit" in error_msg.lower() or "403" in error_msg:
+                if attempt < max_retries - 1:
+                    continue
+                else:
+                    print("🚫 Rate limit vẫn còn sau 3 lần thử!")
+                    return None
+            else:
+                # Lỗi khác, không retry
+                raise e
+    
+    return None
 
 # ======================
 # 1️⃣ Load config
@@ -114,14 +148,38 @@ def get_simple_signal():
 def check_account_status():
     """Kiểm tra trạng thái tài khoản"""
     try:
-        # Balance
-        balance_data = session.get_wallet_balance(accountType="UNIFIED")
+        # Balance với retry
+        print("💰 Đang check balance...")
+        balance_data = retry_api_call(
+            session.get_wallet_balance,
+            accountType="UNIFIED"
+        )
+        
+        if balance_data is None:
+            print("⚠️ Không thể lấy balance, sử dụng mock data...")
+            return {
+                'balance': 0,
+                'positions': 0,
+                'can_trade': False,
+                'error': 'rate_limit'
+            }
+        
         account_info = balance_data['result']['list'][0]
         available_balance = float(account_info.get('totalAvailableBalance', 0))
         
-        # Positions
-        positions = session.get_positions(category="linear", symbol=SYMBOL)
-        open_positions = [p for p in positions['result']['list'] if float(p['size']) > 0]
+        # Positions với retry
+        print("📊 Đang check positions...")
+        positions_data = retry_api_call(
+            session.get_positions,
+            category="linear",
+            symbol=SYMBOL
+        )
+        
+        if positions_data is None:
+            print("⚠️ Không thể lấy positions, assume 0 positions...")
+            open_positions = []
+        else:
+            open_positions = [p for p in positions_data['result']['list'] if float(p['size']) > 0]
         
         print(f"💰 Available Balance: ${available_balance:.2f}")
         print(f"📊 Open Positions: {len(open_positions)}")
