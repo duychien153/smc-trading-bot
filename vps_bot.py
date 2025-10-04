@@ -257,6 +257,118 @@ def get_smc_signal():
         print(f"❌ SMC analysis error: {e}")
         return None
 
+def calculate_position_size(signal, available_balance):
+    """Calculate position size based on risk management"""
+    try:
+        current_price = signal['entry_price']
+        stop_loss = signal['stop_loss']
+        
+        # Calculate risk per unit
+        if signal['direction'] == 'LONG':
+            risk_per_unit = current_price - stop_loss
+        else:
+            risk_per_unit = stop_loss - current_price
+            
+        # Calculate position size based on risk
+        risk_amount = available_balance * (RISK_PERCENT / 100)  # 1% risk
+        position_size = min(risk_amount / risk_per_unit, POSITION_SIZE_USDT / current_price)
+        
+        # Round to appropriate precision for BTCUSDT
+        position_size = round(position_size, 3)
+        
+        print(f"💰 Risk Amount: ${risk_amount:.2f}")
+        print(f"📏 Position Size: {position_size} BTC")
+        
+        return position_size if position_size >= 0.001 else 0.001  # Minimum 0.001 BTC
+        
+    except Exception as e:
+        print(f"❌ Position size calculation error: {e}")
+        return 0.001
+
+def place_market_order(signal):
+    """Place market order with stop loss and take profit"""
+    try:
+        print(f"🚀 Placing {signal['direction']} market order...")
+        
+        # Get current balance
+        balance_data = retry_api_call(session.get_wallet_balance, accountType="UNIFIED")
+        if not balance_data:
+            print("❌ Cannot get balance for order placement")
+            return None
+            
+        available_balance = float(balance_data['result']['list'][0].get('totalAvailableBalance', 0))
+        
+        # Calculate position size
+        qty = calculate_position_size(signal, available_balance)
+        
+        if qty < 0.001:
+            print("❌ Position size too small or insufficient balance")
+            return None
+        
+        # Place main market order
+        side = "Buy" if signal['direction'] == 'LONG' else "Sell"
+        
+        order_result = retry_api_call(
+            session.place_order,
+            category="linear",
+            symbol=SYMBOL,
+            side=side,
+            orderType="Market",
+            qty=str(qty),
+            reduceOnly=False
+        )
+        
+        if not order_result or order_result.get('retCode') != 0:
+            print(f"❌ Market order failed: {order_result}")
+            return None
+            
+        order_id = order_result['result']['orderId']
+        print(f"✅ Market order placed! ID: {order_id}")
+        
+        # Wait a moment for order to execute
+        time.sleep(2)
+        
+        # Place Stop Loss order
+        sl_side = "Sell" if signal['direction'] == 'LONG' else "Buy"
+        sl_result = retry_api_call(
+            session.place_order,
+            category="linear", 
+            symbol=SYMBOL,
+            side=sl_side,
+            orderType="Market",
+            qty=str(qty),
+            stopLoss=str(signal['stop_loss']),
+            reduceOnly=True
+        )
+        
+        if sl_result and sl_result.get('retCode') == 0:
+            print(f"✅ Stop Loss placed at ${signal['stop_loss']:.2f}")
+        else:
+            print(f"⚠️ Stop Loss failed: {sl_result}")
+        
+        # Place Take Profit order  
+        tp_result = retry_api_call(
+            session.place_order,
+            category="linear",
+            symbol=SYMBOL, 
+            side=sl_side,
+            orderType="Market",
+            qty=str(qty),
+            takeProfit=str(signal['take_profit']),
+            reduceOnly=True
+        )
+        
+        if tp_result and tp_result.get('retCode') == 0:
+            print(f"✅ Take Profit placed at ${signal['take_profit']:.2f}")
+        else:
+            print(f"⚠️ Take Profit failed: {tp_result}")
+            
+        return order_id
+        
+    except Exception as e:
+        print(f"❌ Order placement error: {e}")
+        return None
+
 def check_account_status():
     """Check account balance and positions"""
     try:
@@ -335,8 +447,12 @@ def main():
         print(f"🔒 Confidence: {signal['confidence']}%")
         
         if AUTO_TRADE:
-            print("🤖 Auto-trading enabled - would place order here")
-            # Add actual order placement logic here if needed
+            print("🤖 Auto-trading enabled - placing order...")
+            place_order_result = place_market_order(signal)
+            if place_order_result:
+                print(f"✅ Order placed successfully! ID: {place_order_result}")
+            else:
+                print("❌ Failed to place order")
         else:
             print("📋 Auto-trading disabled - signal logged only")
     else:
