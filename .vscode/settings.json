@@ -1,0 +1,10 @@
+{
+    "emeraldwalk.runonsave": {
+        "commands": [
+            {
+                "match": "main\\.py$",
+                "cmd": "/Users/chiennd/bot-trade/venv/bin/python ${file}"
+            }
+        ]
+    }
+}

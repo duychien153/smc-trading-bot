@@ -1,0 +1,7 @@
+python-dotenv==1.1.1
+pybit==5.12.0
+pandas==2.3.3
+numpy==2.0.2
+TA-Lib==0.4.32
+matplotlib==3.9.2
+plotly==5.24.1
