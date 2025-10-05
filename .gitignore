@@ -1,5 +1,36 @@
-node_modules/
+# Python
 venv/
-*.log
 __pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+ENV/
+
+# Logs
+*.log
+logs/*.log
+
+# Environment
+.env
+.env.local
+.env.production
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Dependencies
+node_modules/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
